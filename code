@@ -1,0 +1,324 @@
+#constants
+ct_FOLLOW_enemy_distance = 200
+ct_FOLLOW_enemy_rift_speed = 6
+ct_HIT_random_turn_angle= 150
+ct_SEARCH_random_turn_angle= 90
+ct_SEARCH_timeout_rift= 400
+ct_SEARCH_timeout_turn= 500
+ct_SEARCH_timeout_alter_direction = 400
+ct_TURN_right = 1
+ct_TURN_left = 2
+ct_TURN_off = 0
+ct_TURN_angle_slow = 60
+ct_rift_enable = 0
+
+#main
+main_init()
+
+
+if enemy_visible
+	shoot()
+	follow()
+	
+end
+
+if !enemy_visible
+	
+  if !hited()
+	search()
+  end
+	update_turn()
+end
+
+
+
+main_end()
+
+#functions
+
+#inicializacion
+function main_init()
+	#detecta nave inicializada
+	if energy == 5 and last_energy <= 1
+		is_started = 1
+    setspeed(5)
+    if !enemy_visible
+    	tryrift
+    end
+	end
+	
+	load_vars()
+end
+
+#fin de codigo -- guarda datos
+function main_end()
+	is_started = 0
+	if enemy_visible
+		last_enemy_distance = enemy_distance
+		last_enemy_angle = enemy_angle
+		last_enemy_rel_y = enemy_rel_y
+		last_enemy_rel_x = enemy_rel_x
+		last_enemy_abs_angle = enemy_abs_angle
+		laste_enemy_distance = enemy_distance
+		last_seen=0
+		
+	else
+		last_seen = last_seen + 1
+	end
+	# variables incrementables
+	if timeto_rift>0
+		timeto_rift = timeto_rift - 1
+	end
+	last_fire = last_fire + 1
+	last_fire_try = last_fire_try + 1
+	last_energy = energy
+	last_direction = direction
+end
+
+#calcula variables auxiliares y datos del enemigo
+function load_vars()
+	my_move_y = speed * sin(last_direction)
+	my_move_x = speed * cos(last_direction)
+	if enemy_visible
+		if last_seen >1
+			turn(0,ct_TURN_off) #frena busqueda / huida
+			setspeed(5)
+		end
+		enemy_abs_angle = direction+enemy_angle
+		enemy_rel_y = enemy_distance * sin(enemy_abs_angle)
+		enemy_rel_x = enemy_distance * cos(enemy_abs_angle)
+		if last_seen == 0
+			enemy_move_y =  my_move_y - last_enemy_rel_y + enemy_rel_y
+			enemy_move_x = my_move_x - last_enemy_rel_x  + enemy_rel_x
+			      if abs(enemy_mv_angle -enemy_mv_angle_last)<3
+							enemy_speed = sqrt(pow(enemy_move_x,2)+pow(enemy_move_y,2))
+			      end
+			enemy_mv_angle_last = enemy_mv_angle
+			enemy_mv_angle = atan2(enemy_move_y,enemy_move_x)
+			enemy_mv_angle_diff =enemy_mv_angle_last - enemy_mv_angle
+			enemy_turning = turningangles(enemy_mv_angle_last ,enemy_mv_angle)
+			if enemy_mv_angle_diff>0
+				enemy_turning = ct_TURN_left
+			else
+				enemy_turning = ct_TURN_right
+			end
+			enemy_data=1
+		else
+			enemy_data=0
+		end
+	end
+end
+
+function tryfire()
+	fired=false
+	if fire()
+		last_fire =0
+		fired=true
+	end
+	last_fire_try = 0	
+	return fired
+end
+
+function tryrift()
+  if speed==0
+    return false
+  end
+	if timeto_rift==0 and ct_rift_enable
+		timeto_rift=151
+		rift
+		return true
+	end
+	return false
+end
+
+#dispara si esta en la mira
+function shoot()
+	if intarget()
+		#enobjetivo
+		tryrift()
+		setspeed(5)
+		turn(direction+90,ct_TURN_left)
+	end
+  if enemy_speed<2 and enemy_distance<10
+    tryfire()
+  end
+  	#enemigo en disparo directo
+
+  	if (abs(enemy_angle) < 10 and enemy_distance < 300)
+	  tryfire()
+	end
+
+	if (abs(enemy_angle) < 30  and enemy_distance < 50)
+	  tryfire()
+	end
+
+	if (abs(enemy_angle) < 60 and enemy_distance < 15)
+	  tryfire()
+	end
+	  #lejos pero en misma direccion de la nave
+	  if abs(enemy_mv_angle-direction)<5 and (abs(enemy_rel_y)<5 or abs(enemy_rel_x)<5)
+	    tryfire()
+	  end
+end
+
+
+
+#en la mira del enemigo
+function intarget()
+  ang_diff = abs(direction-enemy_mv_angle)
+  if ang_diff>80 and ang_diff<280
+    return 1
+  end
+  return 0
+end
+
+#me dispararon
+function hited()
+	if energy < last_energy and energy<5
+    if !tryrift()
+			turn(direction +180,ct_TURN_left)
+    else
+      setspeed(0)
+     	turn(direction +180,ct_TURN_left)
+    end	
+		hited_interval=last_hited
+		last_hited=0
+	end
+  if last_hited<100
+    return true
+  else
+    return false
+  end
+end
+
+#llevar nave al angulo indicado
+function turn(angle,direct)
+  direction_obj=angle
+  direction_turn=direct
+end
+
+#doblar en el angulo random
+function turn_rand(angle)
+  if rand()>0.5
+    turn(direction +angle,1)
+			else
+    turn(direction+ angle,2)
+	end
+end
+
+#doblar hasta lograr angulo deseado
+function update_turn()
+  if speed==0
+    faster()
+  else
+	if speed_obj>-1
+		speed_diff=speed_obj-speed
+		faster(speed_diff)
+	end
+  end
+	  if direction_turn==ct_TURN_off
+	    return 0
+	  end
+	setspeed(-1)
+	if direction_obj > 359
+		direction_obj = direction_obj - 360
+	end
+	if direction_obj < 0
+		direction_obj = direction_obj + 360
+	end
+	angle_diff=abs((direction - direction_obj))
+	if angle_diff>5
+		if angle_diff>ct_TURN_angle_slow
+			slower(5)
+		else
+			faster(5)
+		end
+    		if direction_turn==ct_TURN_right
+			right(5)
+		else
+			left(5)
+    		end
+	  else
+		setspeed(5)
+	    direction_turn_last=direction_turn
+	    direction_turn=ct_TURN_off
+ 	end
+
+end
+
+function setspeed(spd)
+	speed_obj=spd
+end
+
+
+
+#devuelve direccion opuesta
+function invertTurn()
+	if direction_turn == ct_TURN_off
+		direc=direction_turn_last
+	else
+		direc=direction_turn
+	end	
+	if direc == ct_TURN_right
+		return ct_TURN_left
+	else if direc == ct_TURN_left
+		return ct_TURN_right
+	else
+	 if rand()>0.5
+    		return ct_TURN_left
+	else
+    		return ct_TURN_right
+		end
+	end
+end
+
+#perseguir nave enemiga
+function follow()
+	if intaget()
+		turn(enemy_mv_angle,ct_TURN_right)
+	end
+  if enemy_angle >0 and abs(enemy_angle)>5 and enemy_distance>3
+    		right(5)
+  	else
+    		if abs(enemy_angle)>5
+    			left (5)
+    	end
+	end
+  if enemy_distance < ct_FOLLOW_enemy_distance 
+      		slower(5)
+    	else
+      		faster(5)
+    	end
+  	if enemy_speed>=ct_FOLLOW_enemy_rift_speed and ct_FOLLOW_enemy_rift_speed>0
+			tryrift()
+
+	end
+end
+
+#busca nave enemiga
+function search()
+	#usar last_seen (para establecer la direccion valida), last_shooted _ last_hited
+  	setspeed(5)
+  if abs(direction-enemy_mv_angle)<10 and last_seen<100
+    turn(enemy_mv_angle,turningangles(direction,enemy_mv_angle))
+  else
+  		last_turn = last_turn +1
+    	if last_turn< ct_SEARCH_timeout_alter_direction
+      turn(direction+ct_RANDOM_turn_angle_search,invertTurn())
+    		else
+      			last_turn=0
+    		end
+  end
+	if last_seen > ct_SEARCH_timeout_rift
+		#tryrift() 
+  end
+end
+
+function turningangles(ang1,ang2)
+	ang_diff = ang1-ang2
+	if (ang_diff >=0 and ang_diff <=90) or (ang_diff<=-180 and ang_diff>=-270)
+		return ct_TURN_left
+	end
+	return ct_TURN_right
+end
+
